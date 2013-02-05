@@ -22,6 +22,14 @@
 #ifndef config_h
 #define config_h
 
+#ifndef __AVR_ATmega328P__
+#define __AVR_ATmega328P__
+#endif
+
+#ifndef __AVR_ATmega644P__
+#define __AVR_ATmega644P__
+#endif
+
 // IMPORTANT: Any changes here requires a full re-compiling of the source code to propagate them.
 
 // Default settings. Used when resetting EEPROM. Change to desired name in defaults.h
@@ -30,29 +38,46 @@
 // Serial baud rate
 #define BAUD_RATE 9600
 
+
+//CCHS Motor controllers are all enabled by one pin, active low.
+//Used in stepper.c - st_init
+#define STEPPERS_ENABLE_DDR     DDRC
+#define STEPPERS_ENABLE_PORT    PORTC
+#define STEPPERS_ENABLE_BIT         3 //PC3
+
+//CCHS Motor controllers have a reset pin that needs to be high for operation. 
+//Used in stepper.c - st_init
+#define STEPPERS_RESET_DDR     DDRC
+#define STEPPERS_RESET_PORT    PORTC
+#define STEPPERS_RESET_BIT         4 //PC4
+
+
+
+
 // Define pin-assignments
 // NOTE: All step bit and direction pins must be on the same port.
-#define STEPPING_DDR       DDRD
-#define STEPPING_PORT      PORTD
-#define X_STEP_BIT         2  // Uno Digital Pin 2
-#define Y_STEP_BIT         3  // Uno Digital Pin 3
-#define Z_STEP_BIT         4  // Uno Digital Pin 4
-#define X_DIRECTION_BIT    5  // Uno Digital Pin 5
-#define Y_DIRECTION_BIT    6  // Uno Digital Pin 6
-#define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
+#define STEPPING_DDR       DDRC
+#define STEPPING_PORT      PORTC
+#define X_STEP_BIT         5  // Uno Digital Pin 2
+#define Y_STEP_BIT         6  // Uno Digital Pin 3
+#define Z_STEP_BIT         7  // Uno Digital Pin 4
+#define X_DIRECTION_BIT    2  // Uno Digital Pin 5
+#define Y_DIRECTION_BIT    1  // Uno Digital Pin 6
+#define Z_DIRECTION_BIT    0  // Uno Digital Pin 7
 #define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
 #define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
+//#define DIRECTION_MASK ((1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT))
 #define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
 
-#define STEPPERS_DISABLE_DDR    DDRB
-#define STEPPERS_DISABLE_PORT   PORTB
-#define STEPPERS_DISABLE_BIT    0  // Uno Digital Pin 8
+#define STEPPERS_DISABLE_DDR    DDRC
+#define STEPPERS_DISABLE_PORT   PORTC
+#define STEPPERS_DISABLE_BIT    3  // Uno Digital Pin 8
 #define STEPPERS_DISABLE_MASK (1<<STEPPERS_DISABLE_BIT)
 
 // NOTE: All limit bit pins must be on the same port
-#define LIMIT_DDR       DDRB
-#define LIMIT_PIN       PINB
-#define LIMIT_PORT      PORTB
+#define LIMIT_DDR       DDRA
+#define LIMIT_PIN       PINA
+#define LIMIT_PORT      PORTA
 #define X_LIMIT_BIT     1  // Uno Digital Pin 9
 #define Y_LIMIT_BIT     2  // Uno Digital Pin 10
 #define Z_LIMIT_BIT     3  // Uno Digital Pin 11
@@ -71,7 +96,7 @@
 
 #define COOLANT_FLOOD_DDR   DDRC
 #define COOLANT_FLOOD_PORT  PORTC
-#define COOLANT_FLOOD_BIT   3  // Uno Analog Pin 3
+#define COOLANT_FLOOD_BIT   3  
 
 // NOTE: Uno analog pins 4 and 5 are reserved for an i2c interface, and may be installed at
 // a later date if flash and memory space allows.
@@ -79,7 +104,7 @@
 #ifdef ENABLE_M7
   #define COOLANT_MIST_DDR   DDRC
   #define COOLANT_MIST_PORT  PORTC
-  #define COOLANT_MIST_BIT   4 // Uno Analog Pin 4
+  #define COOLANT_MIST_BIT   3
 #endif  
 
 // NOTE: All pinouts pins must be on the same port
@@ -114,7 +139,7 @@
 // round-off can be great enough to cause problems and/or it's too fast for the Arduino. The correct
 // value for this parameter is machine dependent, so it's advised to set this only as high as needed.
 // Approximate successful values can range from 30L to 100L or more.
-#define ACCELERATION_TICKS_PER_SECOND 50L
+#define ACCELERATION_TICKS_PER_SECOND 40L
 
 // Minimum planner junction speed. Sets the default minimum speed the planner plans for at the end
 // of the buffer and all stops. This should not be much greater than zero and should only be changed

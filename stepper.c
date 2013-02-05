@@ -349,6 +349,18 @@ void st_reset()
 // Initialize and start the stepper motor subsystem
 void st_init()
 {
+  //EXPLICIT INIT STEPPERS
+  DDRC = DDRC | 0xFF; //DDRC Outputs
+  //PORTC = PORTC | B00000100; //ENABLE STEPPERS
+
+  //SET STEPPER ENABLE LOW AND RESET PIN HIGH.
+  STEPPERS_ENABLE_DDR |= 1<<STEPPERS_ENABLE_BIT;
+  STEPPERS_RESET_DDR |= 1<<STEPPERS_RESET_BIT;
+  STEPPERS_ENABLE_PORT &= ~(1<<STEPPERS_ENABLE_BIT);
+  STEPPERS_RESET_PORT |= 1<<STEPPERS_RESET_BIT;
+  //END EXPLICIT
+
+
   // Configure directions of interface pins
   STEPPING_DDR |= STEPPING_MASK;
   STEPPING_PORT = (STEPPING_PORT & ~STEPPING_MASK) | settings.invert_mask;
