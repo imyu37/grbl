@@ -1,3 +1,13 @@
+This is the current firmware on the CCHS Little Mill as of 06.02.2013
+
+Looking pretty good, but needs testing.
+
+##TODO
+* Limit Switches
+* LCD
+* Spindle Control
+* Further Testing
+
 #Grbl - An embedded g-code interpreter and motion-controller for the Arduino/AVR328 microcontroller
 ------------
 
