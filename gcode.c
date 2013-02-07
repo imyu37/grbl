@@ -34,6 +34,10 @@
 #include "protocol.h"
 #include "report.h"
 
+//Only needed for M105, could be moved to report.c for consistency.
+#include "print.h"
+#include <avr/pgmspace.h>
+
 // Declare gc extern struct
 parser_state_t gc;
 
@@ -184,6 +188,7 @@ uint8_t gc_execute_line(char *line)
           #endif
           case 8: gc.coolant_mode = COOLANT_FLOOD_ENABLE; break;
           case 9: gc.coolant_mode = COOLANT_DISABLE; break;
+	  case 105: printPgmString(PSTR("ok T:1337 /")); break; //This is to convince pronterface that it's talking to a 3d-printer.
           default: FAIL(STATUS_UNSUPPORTED_STATEMENT);
         }            
         break;
