@@ -33,17 +33,25 @@
 #include "limits.h"
 #include "report.h"
 
+
+//PSTR TEST
+#include <avr/pgmspace.h>
+#include "print.h"
+//end PSTRTEST
+
 #define MICROSECONDS_PER_ACCELERATION_TICK  (1000000/ACCELERATION_TICKS_PER_SECOND)
 
 void limits_init() 
 {
+
   LIMIT_DDR &= ~(LIMIT_MASK); // Set as input pins
   LIMIT_PORT |= (LIMIT_MASK); // Enable internal pull-up resistors. Normal high operation.
   if (bit_istrue(settings.flags,BITFLAG_HARD_LIMIT_ENABLE)) {
     LIMIT_PCMSK |= LIMIT_MASK; // Enable specific pins of the Pin Change Interrupt
     PCICR |= (1 << LIMIT_INT); // Enable Pin Change Interrupt
+
   } else {
-    LIMIT_PCMSK &= ~LIMIT_MASK; // Disable
+    LIMIT_PCMSK &= (~(LIMIT_MASK)); // Disable
     PCICR &= ~(1 << LIMIT_INT); 
   }
 }
@@ -53,7 +61,7 @@ void limits_init()
 // If a switch is triggered at all, something bad has happened and treat it as such, regardless
 // if a limit switch is being disengaged. It's impossible to reliably tell the state of a 
 // bouncing pin without a debouncing method.
-// NOTE: Do not attach an e-stop to the limit pins, because this interrupt is disabled during
+// NOTE: Do not attach an e-stop to the limit pins, because this interrupt is disabled during		
 // homing cycles and will not respond correctly. Upon user request or need, there may be a
 // special pinout for an e-stop, but it is generally recommended to just directly connect
 // your e-stop switch to the Arduino reset pin, since it is the most correct way to do this.

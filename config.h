@@ -76,23 +76,24 @@
 
 
 // NOTE: All limit bit pins must be on the same port
-#define LIMIT_DDR       DDRD
-#define LIMIT_PIN       PIND
-#define LIMIT_PORT      PORTD
-#define X_LIMIT_BIT     1  // Uno Digital Pin 9
-#define Y_LIMIT_BIT     2  // Uno Digital Pin 10
-#define Z_LIMIT_BIT     3  // Uno Digital Pin 11
-#define LIMIT_INT       PCIE0  // Pin change interrupt enable pin
-#define LIMIT_INT_vect  PCINT0_vect 
-#define LIMIT_PCMSK     PCMSK0 // Pin change interrupt register
+// Somehow this is triggering on stepper movement, so disabled by default. Almost working...
+#define LIMIT_DDR       DDRB
+#define LIMIT_PIN       PINB
+#define LIMIT_PORT      PORTB
+#define X_LIMIT_BIT     4  // Uno Digital Pin 9
+#define Y_LIMIT_BIT     4  // Uno Digital Pin 10
+#define Z_LIMIT_BIT     4  // Uno Digital Pin 11
+#define LIMIT_INT       PCIE1  // Pin change interrupt enable pin
+#define LIMIT_INT_vect  PCINT1_vect //PB Interrupt handler
+#define LIMIT_PCMSK     PCMSK1 // Pin change interrupt register for port B
 #define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
 
 #define SPINDLE_ENABLE_DDR   DDRD
-#define SPINDLE_ENABLE_PORT  PORTD
+#define SPINDLE_ENABLE_PORT  PORTD	
 #define SPINDLE_ENABLE_BIT   4  // Uno Digital Pin 12
 
 #define SPINDLE_DIRECTION_DDR   DDRD
-#define SPINDLE_DIRECTION_PORT  PORTD
+#define SPINDLE_DIRECTION_PORT  PORTD	
 #define SPINDLE_DIRECTION_BIT   5  // Uno Digital Pin 13 (NOTE: D13 can't be pulled-high input due to LED.)
 
 #define COOLANT_FLOOD_DDR   DDRD
@@ -115,9 +116,9 @@
 #define PIN_RESET        -1  // Uno Analog Pin 0
 #define PIN_FEED_HOLD    -1  // Uno Analog Pin 1
 #define PIN_CYCLE_START  -1  // Uno Analog Pin 2
-#define PINOUT_INT       PCIE1  // Pin change interrupt enable pin
-#define PINOUT_INT_vect  PCINT1_vect
-#define PINOUT_PCMSK     PCMSK1 // Pin change interrupt register
+#define PINOUT_INT       PCIE3  // Pin change interrupt enable pin
+#define PINOUT_INT_vect  PCINT3_vect
+#define PINOUT_PCMSK     PCMSK3 // Pin change interrupt register
 #define PINOUT_MASK ((1<<PIN_RESET)|(1<<PIN_FEED_HOLD)|(1<<PIN_CYCLE_START))
 
 // Define runtime command special characters. These characters are 'picked-off' directly from the
