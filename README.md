@@ -1,11 +1,12 @@
-This is the current firmware on the CCHS Little Mill as of 06.02.2013
+This is grbl for the hackCNC CNCPlotter board. It is nearly working.
 
-Looking pretty good, but needs testing.
+Includes 32u4 Support via LUFA. In addition to that, contributions were made by tmpvar - https://github.com/tmpvar/grbl/commits/atmega32u4-support
+
+Grbl Version 8a. Needs to be brought forward.
+
 
 ##TODO
-* Limit Switches
 * LCD
-* Spindle Control
 * Further Testing
 
 #Grbl - An embedded g-code interpreter and motion-controller for the Arduino/AVR328 microcontroller

@@ -23,12 +23,16 @@
 #define stepper_h 
 
 #include <avr/io.h>
+#include <avr/sleep.h>
+
+// Some useful constants
+#define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
+#define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
+#define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
+#define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
 
 // Initialize and setup the stepper motor subsystem
 void st_init();
-
-// Enable steppers, but cycle does not start unless called by motion control or runtime command.
-void st_wake_up();
 
 // Immediately disables steppers
 void st_go_idle();

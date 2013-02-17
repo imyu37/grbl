@@ -19,10 +19,6 @@
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/* A big thanks to Alden Hart of Synthetos, supplier of grblshield and TinyG, who has
-   been integral throughout the development of the higher level details of Grbl, as well
-   as being a consistent sounding board for the future of accessible and free CNC. */
-
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include "config.h"
@@ -30,79 +26,75 @@
 #include "nuts_bolts.h"
 #include "stepper.h"
 #include "spindle_control.h"
-#include "coolant_control.h"
 #include "motion_control.h"
 #include "gcode.h"
 #include "protocol.h"
 #include "limits.h"
-#include "report.h"
 #include "settings.h"
-#include "serial.h"
 
 // Declare system global variable structure
-system_t sys; 
+system_t sys;
 
 int main(void)
 {
+
+
+  st_init(); // Setup stepper pins and interrupt timers
+
   // Initialize system
   serial_init(); // Setup serial baud rate and interrupts
-  settings_init(); // Load grbl settings from EEPROM
-  st_init(); // Setup stepper pins and interrupt timers
-  sei(); // Enable interrupts
-  
+
   memset(&sys, 0, sizeof(sys));  // Clear all system variables
   sys.abort = true;   // Set abort to complete initialization
-  sys.state = STATE_INIT;  // Set alarm state to indicate unknown initial position
-  
+
   for(;;) {
-  
+
     // Execute system reset upon a system abort, where the main program will return to this loop.
     // Once here, it is safe to re-initialize the system. At startup, the system will automatically
     // reset to finish the initialization process.
     if (sys.abort) {
+
+      // Retain last known machine position and work coordinate offset(s). If the system abort
+      // occurred while in motion, machine position is not guaranteed, since a hard stop can cause
+      // the steppers to lose steps. Always perform a feedhold before an abort, if maintaining
+      // accurate machine position is required.
+      // TODO: Report last position and coordinate offset to users to help relocate origins. Future
+      // releases will auto-reset the machine position back to [0,0,0] if an abort is used while
+      // grbl is moving the machine.
+      int32_t last_position[3];
+      double last_coord_system[N_COORDINATE_SYSTEM][3];
+      memcpy(last_position, sys.position, sizeof(sys.position)); // last_position[] = sys.position[]
+      memcpy(last_coord_system, sys.coord_system, sizeof(sys.coord_system)); // last_coord_system[] = sys.coord_system[]
+
       // Reset system.
-      serial_reset_read_buffer(); // Clear serial read buffer
+      memset(&sys, 0, sizeof(sys)); // Clear all system variables
+      serial_reset_read_buffer();
+      settings_init(); // Load grbl settings from EEPROM
+      protocol_init(); // Clear incoming line data
       plan_init(); // Clear block buffer and planner variables
       gc_init(); // Set g-code parser to default state
-      protocol_init(); // Clear incoming line data and execute startup lines
       spindle_init();
-      coolant_init();
       limits_init();
       st_reset(); // Clear stepper subsystem variables.
 
-      // Sync cleared gcode and planner positions to current system position, which is only
-      // cleared upon startup, not a reset/abort. 
-      sys_sync_current_position();
+      // Reload last known machine position and work systems. G92 coordinate offsets are reset.
+      memcpy(sys.position, last_position, sizeof(last_position)); // sys.position[] = last_position[]
+      memcpy(sys.coord_system, last_coord_system, sizeof(last_coord_system)); // sys.coord_system[] = last_coord_system[]
+      gc_set_current_position(last_position[X_AXIS],last_position[Y_AXIS],last_position[Z_AXIS]);
+      plan_set_current_position(last_position[X_AXIS],last_position[Y_AXIS],last_position[Z_AXIS]);
 
-      // Reset system variables.
-      sys.abort = false;
-      sys.execute = 0;
-      if (bit_istrue(settings.flags,BITFLAG_AUTO_START)) { sys.auto_start = true; }
-      
-      // Check for power-up and set system alarm if homing is enabled to force homing cycle
-      // by setting Grbl's alarm state. Alarm locks out all g-code commands, including the
-      // startup scripts, but allows access to settings and internal commands. Only a homing
-      // cycle '$H' or kill alarm locks '$X' will disable the alarm.
-      // NOTE: The startup script will run after successful completion of the homing cycle, but
-      // not after disabling the alarm locks. Prevents motion startup blocks from crashing into
-      // things uncontrollably. Very bad.
-      #ifdef HOMING_INIT_LOCK
-        if (sys.state == STATE_INIT && bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) { sys.state = STATE_ALARM; }
+      // Set system runtime defaults
+      // TODO: Eventual move to EEPROM from config.h when all of the new settings are worked out.
+      // Mainly to avoid having to maintain several different versions.
+      #ifdef CYCLE_AUTO_START
+        sys.auto_start = true;
       #endif
-      
-      // Check for and report alarm state after a reset, error, or an initial power up.
-      if (sys.state == STATE_ALARM) {
-        report_feedback_message(MESSAGE_ALARM_LOCK); 
-      } else {
-        // All systems go. Set system to ready and execute startup script.
-        sys.state = STATE_IDLE;
-        protocol_execute_startup(); 
-      }
+      // TODO: Install G20/G21 unit default into settings and load appropriate settings.
     }
-    
+
     protocol_execute_runtime();
-    protocol_process(); // ... process the serial protocol
-    
+    serial_tick();
+
   }
   return 0;   /* never reached */
 }

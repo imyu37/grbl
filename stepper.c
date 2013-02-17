@@ -22,11 +22,18 @@
 /* The timer calculations of this module informed by the 'RepRap cartesian firmware' by Zack Smith
    and Philipp Tiefenbacher. */
 
-#include <avr/interrupt.h>
 #include "stepper.h"
 #include "config.h"
 #include "settings.h"
+#include <math.h>
+#include <stdlib.h>
+#include <util/delay.h>
+#include "nuts_bolts.h"
+#include <avr/interrupt.h>
 #include "planner.h"
+#include "limits.h"
+
+#include <LUFA/Common/Common.h>
 
 // Some useful constants
 #define TICKS_PER_MICROSECOND (F_CPU/1000000)
@@ -80,32 +87,25 @@ static volatile uint8_t busy;   // True when SIG_OUTPUT_COMPARE1A is being servi
 
 static void set_step_events_per_minute(uint32_t steps_per_minute);
 
-// Stepper state initialization. Cycle should only start if the st.cycle_start flag is
-// enabled. Startup init and limits call this function but shouldn't start the cycle.
-void st_wake_up() 
+// Stepper state initialization
+static void st_wake_up() 
 {
+  // Initialize stepper output bits
+  out_bits = (0) ^ (settings.invert_mask); 
+  // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
+  #if STEP_PULSE_DELAY > 0
+    // Set total step pulse time after direction pin set. Ad hoc computation from oscilloscope.
+    step_pulse_time = -(((settings.pulse_microseconds+STEP_PULSE_DELAY-2)*TICKS_PER_MICROSECOND) >> 3);
+    // Set delay between direction pin write and step command.
+    OCR2A = -(((settings.pulse_microseconds)*TICKS_PER_MICROSECOND) >> 3);
+  #else // Normal operation
+    // Set step pulse time. Ad hoc computation from oscilloscope. Uses two's complement.
+    step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
+  #endif
   // Enable steppers by resetting the stepper disable port
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { 
-    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); 
-  } else { 
-    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
-  }
-  if (sys.state == STATE_CYCLE) {
-    // Initialize stepper output bits
-    out_bits = (0) ^ (settings.invert_mask); 
-    // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
-    #ifdef STEP_PULSE_DELAY
-      // Set total step pulse time after direction pin set. Ad hoc computation from oscilloscope.
-      step_pulse_time = -(((settings.pulse_microseconds+STEP_PULSE_DELAY-2)*TICKS_PER_MICROSECOND) >> 3);
-      // Set delay between direction pin write and step command.
-      OCR2A = -(((settings.pulse_microseconds)*TICKS_PER_MICROSECOND) >> 3);
-    #else // Normal operation
-      // Set step pulse time. Ad hoc computation from oscilloscope. Uses two's complement.
-      step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
-    #endif
-    // Enable stepper driver interrupt
-    TIMSK1 |= (1<<OCIE1A);
-  }
+  STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  // Enable stepper driver interrupt
+  TIMSK1 |= (1<<OCIE1A);
 }
 
 // Stepper shutdown
@@ -113,17 +113,13 @@ void st_go_idle()
 {
   // Disable stepper driver interrupt
   TIMSK1 &= ~(1<<OCIE1A); 
-  // Disable steppers only upon system alarm activated or by user setting to not be kept enabled.
-  if ((settings.stepper_idle_lock_time != 0xff) || bit_istrue(sys.execute,EXEC_ALARM)) {
-    // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
-    // stop and not drift from residual inertial forces at the end of the last movement.
-    delay_ms(settings.stepper_idle_lock_time);
-    if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { 
-      STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); 
-    } else { 
-      STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); 
-    }   
-  }
+  // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
+  // stop and not drift from residual inertial forces at the end of the last movement.
+  #if STEPPER_IDLE_LOCK_TIME > 0
+    _delay_ms(STEPPER_IDLE_LOCK_TIME);   
+  #endif
+  // Disable steppers by setting stepper disable
+  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
 }
 
 // This function determines an acceleration velocity change every CYCLES_PER_ACCELERATION_TICK by
@@ -145,34 +141,52 @@ inline static uint8_t iterate_trapezoid_cycle_counter()
 // It is supported by The Stepper Port Reset Interrupt which it uses to reset the stepper port after each pulse. 
 // The bresenham line tracer algorithm controls all three stepper outputs simultaneously with these two interrupts.
 ISR(TIMER1_COMPA_vect)
-{        
+{ 
+  	//debug.
+//  	printPgmString(PSTR("\r\nPopped TIMER1_COMPA!"));
+//  	delay_ms(500);
+	//end debug.       
+
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
   
   // Set the direction pins a couple of nanoseconds before we step the steppers
   STEPPING_PORT = (STEPPING_PORT & ~DIRECTION_MASK) | (out_bits & DIRECTION_MASK);
   // Then pulse the stepping pins
-  #ifdef STEP_PULSE_DELAY
+  #if STEP_PULSE_DELAY > 0
     step_bits = (STEPPING_PORT & ~STEP_MASK) | out_bits; // Store out_bits to prevent overwriting.
   #else  // Normal operation
     STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | out_bits;
   #endif
+
+  
+
+
+
+//  GlobalInterruptDisable();
   // Enable step pulse reset timer so that The Stepper Port Reset Interrupt can reset the signal after
   // exactly settings.pulse_microseconds microseconds, independent of the main Timer1 prescaler.
-  TCNT2 = step_pulse_time; // Reload timer counter
-  TCCR2B = (1<<CS21); // Begin timer2. Full speed, 1/8 prescaler
+//  TCNT2 = step_pulse_time; // Reload timer counter
+//  TCCR2B = (1<<CS21); // Begin timer3. Full speed, 1/8 prescaler
+
+  TCNT3 = step_pulse_time; // Reload timer counter
+  TCCR3B = (1<<CS31); // Begin timer3. Full speed, 1/8 prescaler
 
   busy = true;
-  // Re-enable interrupts to allow ISR_TIMER2_OVERFLOW to trigger on-time and allow serial communications
+  // Re-enable interrupts to allow ISR_TIMER3_OVERFLOW to trigger on-time and allow serial communications
   // regardless of time in this handler. The following code prepares the stepper driver for the next
   // step interrupt compare and will always finish before returning to the main program.
-  sei();
+  
+  sei(); 
+//  GlobalInterruptEnable();
+
+
   
   // If there is no current block, attempt to pop one from the buffer
   if (current_block == NULL) {
     // Anything in the buffer? If so, initialize next motion.
     current_block = plan_get_current_block();
     if (current_block != NULL) {
-      if (sys.state == STATE_CYCLE) {
+      if (!sys.feed_hold) { 
         // During feed hold, do not update rate and trap counter. Keep decelerating.
         st.trapezoid_adjusted_rate = current_block->initial_rate;
         set_step_events_per_minute(st.trapezoid_adjusted_rate); // Initialize cycles_per_step_event
@@ -186,6 +200,7 @@ ISR(TIMER1_COMPA_vect)
       st.step_events_completed = 0;     
     } else {
       st_go_idle();
+      sys.cycle_start = false;
       bit_true(sys.execute,EXEC_CYCLE_STOP); // Flag main program for cycle end
     }    
   } 
@@ -219,7 +234,7 @@ ISR(TIMER1_COMPA_vect)
 
     // While in block steps, check for de/ac-celeration events and execute them accordingly.
     if (st.step_events_completed < current_block->step_event_count) {
-      if (sys.state == STATE_HOLD) {
+      if (sys.feed_hold) {
         // Check for and execute feed hold by enforcing a steady deceleration from the moment of 
         // execution. The rate of deceleration is limited by rate_delta and will never decelerate
         // faster or slower than in normal operation. If the distance required for the feed hold 
@@ -235,6 +250,7 @@ ISR(TIMER1_COMPA_vect)
             // remain intact to ensure the stepper path is exactly the same. Feed hold is still
             // active and is released after the buffer has been reinitialized.
             st_go_idle();
+            sys.cycle_start = false;
             bit_true(sys.execute,EXEC_CYCLE_STOP); // Flag main program that feed hold is complete.
           } else {
             st.trapezoid_adjusted_rate -= current_block->rate_delta;
@@ -263,14 +279,9 @@ ISR(TIMER1_COMPA_vect)
         } else if (st.step_events_completed >= current_block->decelerate_after) {
           // Reset trapezoid tick cycle counter to make sure that the deceleration is performed the
           // same every time. Reset to CYCLES_PER_ACCELERATION_TICK/2 to follow the midpoint rule for
-          // an accurate approximation of the deceleration curve. For triangle profiles, down count
-          // from current cycle counter to ensure exact deceleration curve.
+          // an accurate approximation of the deceleration curve.
           if (st.step_events_completed == current_block-> decelerate_after) {
-            if (st.trapezoid_adjusted_rate == current_block->nominal_rate) {
-              st.trapezoid_tick_cycle_counter = CYCLES_PER_ACCELERATION_TICK/2; // Trapezoid profile
-            } else {  
-              st.trapezoid_tick_cycle_counter = CYCLES_PER_ACCELERATION_TICK-st.trapezoid_tick_cycle_counter; // Triangle profile
-            }
+            st.trapezoid_tick_cycle_counter = CYCLES_PER_ACCELERATION_TICK/2;
           } else {
             // Iterate cycle counter and check if speeds need to be reduced.
             if ( iterate_trapezoid_cycle_counter() ) {  
@@ -308,30 +319,28 @@ ISR(TIMER1_COMPA_vect)
       plan_discard_current_block();
     }
   }
-  out_bits ^= settings.invert_mask;  // Apply step and direction invert mask    
+  out_bits ^= settings.invert_mask;  // Apply stepper invert mask    
   busy = false;
 }
 
 // This interrupt is set up by ISR_TIMER1_COMPAREA when it sets the motor port bits. It resets
 // the motor port after a short period (settings.pulse_microseconds) completing one step cycle.
-// NOTE: Interrupt collisions between the serial and stepper interrupts can cause delays by
-// a few microseconds, if they execute right before one another. Not a big deal, but can
-// cause issues at high step rates if another high frequency asynchronous interrupt is 
-// added to Grbl.
-ISR(TIMER2_OVF_vect)
+// TODO: It is possible for the serial interrupts to delay this interrupt by a few microseconds, if
+// they execute right before this interrupt. Not a big deal, but could use some TLC at some point.
+ISR(TIMER3_OVF_vect)
 {
   // Reset stepping pins (leave the direction pins)
   STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | (settings.invert_mask & STEP_MASK); 
-  TCCR2B = 0; // Disable Timer2 to prevent re-entering this interrupt when it's not needed. 
+  TCCR3B = 0; // Disable Timer3 to prevent re-entering this interrupt when it's not needed. 
 }
 
-#ifdef STEP_PULSE_DELAY
+#if STEP_PULSE_DELAY > 0
   // This interrupt is used only when STEP_PULSE_DELAY is enabled. Here, the step pulse is
-  // initiated after the STEP_PULSE_DELAY time period has elapsed. The ISR TIMER2_OVF interrupt
+  // initiated after the STEP_PULSE_DELAY time period has elapsed. The ISR TIMER3_OVF interrupt
   // will then trigger after the appropriate settings.pulse_microseconds, as in normal operation.
   // The new timing between direction, step pulse, and step complete events are setup in the
   // st_wake_up() routine.
-  ISR(TIMER2_COMPA_vect) 
+  ISR(TIMER3_COMPA_vect) 
   { 
     STEPPING_PORT = step_bits; // Begin step pulse.
   }
@@ -349,18 +358,6 @@ void st_reset()
 // Initialize and start the stepper motor subsystem
 void st_init()
 {
-  //EXPLICIT INIT STEPPERS
-  DDRC = DDRC | 0xFF; //DDRC Outputs
-  //PORTC = PORTC | B00000100; //ENABLE STEPPERS
-
-  //SET STEPPER ENABLE LOW AND RESET PIN HIGH.
-  STEPPERS_ENABLE_DDR |= 1<<STEPPERS_ENABLE_BIT;
-  STEPPERS_RESET_DDR |= 1<<STEPPERS_RESET_BIT;
-  STEPPERS_ENABLE_PORT &= ~(1<<STEPPERS_ENABLE_BIT);
-  STEPPERS_RESET_PORT |= 1<<STEPPERS_RESET_BIT;
-  //END EXPLICIT
-
-
   // Configure directions of interface pins
   STEPPING_DDR |= STEPPING_MASK;
   STEPPING_PORT = (STEPPING_PORT & ~STEPPING_MASK) | settings.invert_mask;
@@ -376,16 +373,16 @@ void st_init()
   TCCR1A &= ~(3<<COM1A0); 
   TCCR1A &= ~(3<<COM1B0); 
 	
-  // Configure Timer 2
-  TCCR2A = 0; // Normal operation
-  TCCR2B = 0; // Disable timer until needed.
-  TIMSK2 |= (1<<TOIE2); // Enable Timer2 Overflow interrupt     
-  #ifdef STEP_PULSE_DELAY
-    TIMSK2 |= (1<<OCIE2A); // Enable Timer2 Compare Match A interrupt
+  // Configure Timer 3
+  TCCR3A = 0; // Normal operation
+  TCCR3B = 0; // Disable timer until needed.
+  TIMSK3 |= (1<<TOIE3);      
+  
+  #if STEP_PULSE_DELAY > 0
+    TIMSK3 |= (1<<OCIE3A); // Enable Timer3 Compare Match A interrupt
   #endif
-
-  // Start in the idle state, but first wake up to check for keep steppers enabled option.
-  st_wake_up();
+  
+  // Start in the idle state
   st_go_idle();
 }
 
@@ -394,36 +391,36 @@ void st_init()
 static uint32_t config_step_timer(uint32_t cycles)
 {
   uint16_t ceiling;
-  uint8_t prescaler;
+  uint16_t prescaler;
   uint32_t actual_cycles;
   if (cycles <= 0xffffL) {
     ceiling = cycles;
-    prescaler = 1; // prescaler: 0
+    prescaler = 0; // prescaler: 0
     actual_cycles = ceiling;
   } else if (cycles <= 0x7ffffL) {
     ceiling = cycles >> 3;
-    prescaler = 2; // prescaler: 8
+    prescaler = 1; // prescaler: 8
     actual_cycles = ceiling * 8L;
   } else if (cycles <= 0x3fffffL) {
     ceiling =  cycles >> 6;
-    prescaler = 3; // prescaler: 64
+    prescaler = 2; // prescaler: 64
     actual_cycles = ceiling * 64L;
   } else if (cycles <= 0xffffffL) {
     ceiling =  (cycles >> 8);
-    prescaler = 4; // prescaler: 256
+    prescaler = 3; // prescaler: 256
     actual_cycles = ceiling * 256L;
   } else if (cycles <= 0x3ffffffL) {
     ceiling = (cycles >> 10);
-    prescaler = 5; // prescaler: 1024
+    prescaler = 4; // prescaler: 1024
     actual_cycles = ceiling * 1024L;    
   } else {
     // Okay, that was slower than we actually go. Just set the slowest speed
     ceiling = 0xffff;
-    prescaler = 5;
+    prescaler = 4;
     actual_cycles = 0xffff * 1024;
   }
   // Set prescaler
-  TCCR1B = (TCCR1B & ~(0x07<<CS10)) | (prescaler<<CS10);
+  TCCR1B = (TCCR1B & ~(0x07<<CS10)) | ((prescaler+1)<<CS10);
   // Set ceiling
   OCR1A = ceiling;
   return(actual_cycles);
@@ -439,18 +436,22 @@ static void set_step_events_per_minute(uint32_t steps_per_minute)
 // by the main program functions: planner auto-start and run-time command execution.
 void st_cycle_start() 
 {
-  if (sys.state == STATE_QUEUED) {
-    sys.state = STATE_CYCLE;
-    st_wake_up();
+  if (!sys.cycle_start) {
+    if (!sys.feed_hold) {
+      sys.cycle_start = true;
+      st_wake_up();
+    }
   }
 }
 
 // Execute a feed hold with deceleration, only during cycle. Called by main program.
 void st_feed_hold() 
 {
-  if (sys.state == STATE_CYCLE) {
-    sys.state = STATE_HOLD;
-    sys.auto_start = false; // Disable planner auto start upon feed hold.
+  if (!sys.feed_hold) {
+    if (sys.cycle_start) {
+      sys.auto_start = false; // Disable planner auto start upon feed hold.
+      sys.feed_hold = true;
+    }
   }
 }
 
@@ -469,8 +470,8 @@ void st_cycle_reinitialize()
     set_step_events_per_minute(st.trapezoid_adjusted_rate);
     st.trapezoid_tick_cycle_counter = CYCLES_PER_ACCELERATION_TICK/2; // Start halfway for midpoint rule.
     st.step_events_completed = 0;
-    sys.state = STATE_QUEUED;
-  } else {
-    sys.state = STATE_IDLE;
   }
+  sys.feed_hold = false; // Release feed hold. Cycle is ready to re-start.
 }
+
+
