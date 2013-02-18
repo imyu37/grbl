@@ -43,10 +43,10 @@
 #define STEPPING_PORT      PORTB
 #define X_STEP_BIT         6  // Uno Digital Pin 2
 #define Y_STEP_BIT         4  // Uno Digital Pin 3
-#define Z_STEP_BIT         -1  // Uno Digital Pin 4
+#define Z_STEP_BIT         6  // Uno Digital Pin 4
 #define X_DIRECTION_BIT    7  // Uno Digital Pin 5
 #define Y_DIRECTION_BIT    5  // Uno Digital Pin 6
-#define Z_DIRECTION_BIT    -1  // Uno Digital Pin 7
+#define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
 
 #define STEPPERS_DISABLE_DDR    DDRD
 #define STEPPERS_DISABLE_PORT   PORTD

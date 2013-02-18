@@ -29,6 +29,10 @@
 #include "protocol.h"
 #include "config.h"
 
+
+//DEBUG
+#include "stepper.h"
+
 settings_t settings;
 
 // Version 1 outdated settings record
