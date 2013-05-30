@@ -105,7 +105,7 @@ void protocol_status_report()
    printString(","); printFloat(print_position[Y_AXIS]/settings.steps_per_mm[Y_AXIS]-sys.coord_system[sys.coord_select][Y_AXIS]-sys.coord_offset[Y_AXIS]);
    printString(","); printFloat(print_position[Z_AXIS]/settings.steps_per_mm[Z_AXIS]-sys.coord_system[sys.coord_select][Z_AXIS]-sys.coord_offset[Z_AXIS]);
  #endif
- printString("]\r\n");
+ printString("]\r\nok\r\n");
 }
 
 
@@ -113,6 +113,7 @@ void protocol_init()
 {
   // Print grbl initialization message
   printPgmString(PSTR("\r\nGrbl " GRBL_VERSION));
+  printPgmString(PSTR("\r\n"));
   printPgmString(PSTR("\r\n'$' to dump current settings\r\n"));
 
   char_counter = 0; // Reset line input

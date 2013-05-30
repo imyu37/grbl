@@ -25,8 +25,14 @@ LUFA_PATH    = deps/LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -Iconfig/ -lm -Wl,--gc-sections -ffunction-sections
 LD_FLAGS     =
 
-PROGRAMMER = -c avr109 -P /dev/ttyACM0
+USB_PORT = /dev/ttyACM0
+PROGRAMMER = -c avr109 -P $(USB_PORT)
+#PROGRAMMER = -c stk500 -P /dev/ttyACM0
 AVRDUDE = avrdude -p $(MCU) $(PROGRAMMER) -b57600 -D
+
+RESET_CMD_START = python -c "from serial import Serial;from time import sleep;s=Serial ('
+RESET_CMD_END = ', 115200);s.close();s.open();s.close();s.setBaudrate(1200);s.open();s.close()"
+RESET_CMD = $(RESET_CMD_START)$(USB_PORT)$(RESET_CMD_END)
 
 #If you already have .hex, seems to work better given reset required...
 #can implement a software reset by connecting on 1200 baud, TODO
@@ -46,7 +52,8 @@ include $(LUFA_PATH)/Build/lufa_hid.mk
 include $(LUFA_PATH)/Build/lufa_avrdude.mk
 include $(LUFA_PATH)/Build/lufa_atprogram.mk
 
-upload:		all
+upload:		all	
+		$(RESET_CMD)
 		$(AVRDUDE) -U flash:w:grbl.hex:i 
 
 

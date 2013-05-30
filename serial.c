@@ -94,7 +94,8 @@ void serial_tick() {
 
   if (connected && !was_connected) {
     // Print grbl initialization message
-    printPgmString(PSTR("\r\nGrbl "), GRBL_VERSION);
+    printPgmString(PSTR("\r\nGrbl"), GRBL_VERSION);
+    printPgmString(PSTR("\r\n"));
     printPgmString(PSTR("\r\n'$' to dump current settings\r\n"));
     was_connected = true;
   } else if (was_connected && !connected) {
